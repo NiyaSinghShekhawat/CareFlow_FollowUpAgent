@@ -61,9 +61,16 @@ export default function DoctorDashboard() {
   const [customInput, setCustomInput] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [followUpDate, setFollowUpDate] = useState("");
+  const [followUpDuration, setFollowUpDuration] = useState("2 weeks");
   const [showFollowUpInput, setShowFollowUpInput] = useState(false);
   const [smsInput, setSmsInput] = useState("");
   const [isSendingSms, setIsSendingSms] = useState(false);
+  
+  // Doctor Registration State
+  const [docPhone, setDocPhone] = useState("");
+  const [docEmail, setDocEmail] = useState("");
+  const [isRegisteringDoc, setIsRegisteringDoc] = useState(false);
+  const [docRegistered, setDocRegistered] = useState(false);
 
   // Tab State
   const [activeTab, setActiveTab] = useState<'ongoing' | 'followup' | 'completed'>('ongoing');
@@ -77,7 +84,9 @@ export default function DoctorDashboard() {
     condition: "",
     priority: "normal" as Priority,
     pastMedications: "",
-    pastAllergies: ""
+    pastAllergies: "",
+    phoneNumber: "",
+    email: ""
   });
 
   // Sound Alert Logic
@@ -197,9 +206,31 @@ export default function DoctorDashboard() {
         pastAllergies: formData.pastAllergies,
         assignedDoctorId: currentDoctorId,
         consultancyStatus: "pending",
+        phoneNumber: formData.phoneNumber,
+        email: formData.email,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
+
+      // Trigger Intake Notification
+      try {
+        await fetch("http://localhost:8000/webhook", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            event_type: "patient_intake",
+            patient_id: patientRef.id,
+            payload: {
+              patient_name: `${formData.firstName} ${formData.lastName}`,
+              patient_email: formData.email,
+              phone: formData.phoneNumber,
+              patient_code: patientCode
+            }
+          })
+        });
+      } catch (err) {
+        console.error("Failed to trigger intake webhook", err);
+      }
 
       // Log Admission Action
       await addAction({
@@ -225,7 +256,9 @@ export default function DoctorDashboard() {
         condition: "",
         priority: "normal",
         pastMedications: "",
-        pastAllergies: ""
+        pastAllergies: "",
+        phoneNumber: "",
+        email: ""
       });
       playSound('click');
     } catch (error) {
@@ -307,8 +340,8 @@ export default function DoctorDashboard() {
     setShowDischargeConfirm(false);
     setCustomInput("");
     setShowCustomInput(false);
-    setShowFollowUpInput(false);
     setFollowUpDate("");
+    setFollowUpDuration("2 weeks");
   };
 
   const handleSendCustomSMS = async (p: Patient) => {
@@ -379,6 +412,7 @@ export default function DoctorDashboard() {
                 <input 
                   type="text" 
                   placeholder="e.g. DOC-0001"
+                  suppressHydrationWarning
                   className="w-full pl-6 pr-4 py-4.5 rounded-2xl bg-slate-950 border border-slate-800 text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all uppercase font-mono tracking-widest placeholder:text-slate-700 text-lg shadow-inner"
                   value={doctorIdInput}
                   onChange={(e) => {
@@ -403,6 +437,7 @@ export default function DoctorDashboard() {
             <button 
               type="submit" 
               disabled={formLoading}
+              suppressHydrationWarning
               className="w-full bg-teal-600 hover:bg-teal-500 text-white font-black py-4.5 rounded-2xl transition-all duration-300 shadow-xl shadow-teal-900/20 hover:shadow-teal-500/30 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98] text-lg tracking-wide group"
             >
               {formLoading ? "Verifying..." : (
@@ -472,6 +507,106 @@ export default function DoctorDashboard() {
           >
             Log Out
           </button>
+        </div>
+
+        {/* Doctor Registration Card */}
+        <div className="mb-10">
+          <div className="bg-slate-900/40 backdrop-blur-xl rounded-3xl p-8 border border-slate-800/50 shadow-2xl relative overflow-hidden group">
+            <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+              <User size={120} />
+            </div>
+            
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-8 relative z-10">
+              <div className="max-w-xl">
+                <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                  <Lock className="text-teal-400" size={24} />
+                  Professional Profile Registration
+                </h2>
+                <p className="text-slate-400 text-sm font-medium leading-relaxed">
+                  Register your professional contact information to receive critical patient alerts, 
+                  system notifications, and security updates directly to your WhatsApp and Email.
+                </p>
+              </div>
+
+              {!docRegistered ? (
+                <div className="flex flex-col sm:flex-row gap-4 flex-1 max-w-2xl">
+                    <div className="flex-1 space-y-2">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Mobile Phone (WhatsApp)</label>
+                      <input 
+                        type="tel" 
+                        placeholder="919876543210"
+                        suppressHydrationWarning
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono"
+                        value={docPhone}
+                        onChange={(e) => setDocPhone(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Official Email Address</label>
+                      <input 
+                        type="email" 
+                        placeholder="doctor@hospital.com"
+                        suppressHydrationWarning
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all font-mono"
+                        value={docEmail}
+                        onChange={(e) => setDocEmail(e.target.value)}
+                      />
+                    </div>
+                  <div className="flex items-end">
+                    <button 
+                      onClick={async () => {
+                        if (!docPhone || !docEmail) return;
+                        setIsRegisteringDoc(true);
+                        try {
+                          await fetch("http://localhost:8000/webhook", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              event_type: "doctor_registration",
+                              patient_id: null,
+                              payload: {
+                                doctor_name: currentDoctorId,
+                                phone: docPhone,
+                                email: docEmail
+                              }
+                            })
+                          });
+                          setDocRegistered(true);
+                        } catch (err) {
+                          console.error("Failed to register doctor contact", err);
+                        } finally {
+                          setIsRegisteringDoc(false);
+                        }
+                      }}
+                      disabled={isRegisteringDoc}
+                      className="w-full sm:w-auto h-11 px-8 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-sm shadow-lg shadow-teal-900/20 transition-all disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
+                    >
+                      {isRegisteringDoc ? "Registering..." : (
+                        <>
+                          <Send size={16} />
+                          Confirm Info
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-teal-500/10 border border-teal-500/50 rounded-2xl p-6 flex items-center gap-4 text-teal-400"
+                >
+                  <div className="p-3 bg-teal-500 rounded-full text-slate-950 shadow-lg shadow-teal-500/20">
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg">Verification Successful</h3>
+                    <p className="text-xs text-teal-400/80 font-medium tracking-wide font-mono">Status: Registered & Verified</p>
+                  </div>
+                </motion.div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -567,6 +702,31 @@ export default function DoctorDashboard() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Phone Number</label>
+                    <input 
+                      type="tel" 
+                      placeholder="e.g. 919876543210"
+                      suppressHydrationWarning
+                      className="w-full rounded-lg bg-slate-950 border-slate-800 text-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all p-2.5 text-sm placeholder:text-slate-600"
+                      value={formData.phoneNumber}
+                      onChange={e => setFormData({...formData, phoneNumber: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email Address</label>
+                    <input 
+                      type="email" 
+                      placeholder="patient@example.com"
+                      suppressHydrationWarning
+                      className="w-full rounded-lg bg-slate-950 border-slate-800 text-slate-200 focus:border-teal-500 focus:ring-1 focus:ring-teal-500 transition-all p-2.5 text-sm placeholder:text-slate-600"
+                      value={formData.email}
+                      onChange={e => setFormData({...formData, email: e.target.value})}
+                    />
+                  </div>
+                </div>
+
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Triage Priority</label>
                   <div className="grid grid-cols-3 gap-2">
@@ -621,18 +781,32 @@ export default function DoctorDashboard() {
 
                     return (
                       <div className="space-y-8">
-                        <div className="flex justify-between items-start border-b border-slate-800 pb-4">
-                          <div>
-                            <h2 className="text-3xl font-bold text-white tracking-tight">{p.firstName} {p.lastName}</h2>
-                            <p className="text-slate-400 text-sm font-mono mt-1 bg-slate-800 px-2 py-1 rounded w-fit">ID: {p.patientCode}</p>
+                          <div className="flex justify-between items-start border-b border-slate-800 pb-6">
+                            <div>
+                              <h2 className="text-3xl font-bold text-white tracking-tight">{p.firstName} {p.lastName}</h2>
+                              <div className="flex items-center gap-3 mt-2">
+                                <p className="text-slate-400 text-xs font-mono bg-slate-800 px-2 py-1 rounded w-fit border border-slate-700">ID: {p.patientCode}</p>
+                                {p.phoneNumber && (
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-teal-400 bg-teal-500/10 px-2 py-1 rounded border border-teal-500/20">
+                                    <Activity size={14} />
+                                    {p.phoneNumber}
+                                  </div>
+                                )}
+                                {p.email && (
+                                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 bg-blue-500/10 px-2 py-1 rounded border border-blue-500/20">
+                                    <AlertCircle size={14} />
+                                    {p.email}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button 
+                              onClick={closeModal}
+                              className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+                            >
+                              <X size={28} />
+                            </button>
                           </div>
-                          <button 
-                            onClick={closeModal}
-                            className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
-                          >
-                            <X size={28} />
-                          </button>
-                        </div>
 
                         {showDischargeConfirm ? (
                           <div className="bg-slate-950 p-6 rounded-xl border border-slate-700 shadow-2xl">
@@ -680,6 +854,16 @@ export default function DoctorDashboard() {
                                       onChange={(e) => setFollowUpDate(e.target.value)}
                                     />
                                   </div>
+                                  <div>
+                                    <label className="block text-xs font-bold text-pink-400 uppercase tracking-wider mb-2">Follow-Up Duration</label>
+                                    <input 
+                                      type="text" 
+                                      placeholder="e.g. 2 weeks"
+                                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-white focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all font-medium"
+                                      value={followUpDuration}
+                                      onChange={(e) => setFollowUpDuration(e.target.value)}
+                                    />
+                                  </div>
                                   <div className="flex gap-3">
                                     <button 
                                       onClick={() => setShowFollowUpInput(false)}
@@ -688,13 +872,33 @@ export default function DoctorDashboard() {
                                       Back
                                     </button>
                                     <button 
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (!followUpDate) return;
-                                        updatePatientDetail(p.id, { 
+                                        await updatePatientDetail(p.id, { 
                                           status: 'follow_up', 
                                           followUpDate: followUpDate,
                                           consultancyStatus: 'completed'
-                                        }, `Care completed. Follow-up appointment scheduled for ${new Date(followUpDate).toLocaleDateString()}.`);
+                                        }, `Care completed. Follow-up appointment scheduled for ${new Date(followUpDate).toLocaleDateString()}. Follow-up duration: ${followUpDuration}`);
+
+                                        // Trigger Notification Webhook
+                                        try {
+                                          await fetch("http://localhost:8000/webhook", {
+                                            method: "POST",
+                                            headers: { "Content-Type": "application/json" },
+                                            body: JSON.stringify({
+                                              event_type: "patient_followup",
+                                              patient_id: p.id,
+                                              payload: {
+                                                patient_name: `${p.firstName} ${p.lastName}`,
+                                                patient_email: p.email,
+                                                phone: p.phoneNumber,
+                                                duration: followUpDuration
+                                              }
+                                            })
+                                          });
+                                        } catch (err) {
+                                          console.error("Failed to trigger follow-up webhook", err);
+                                        }
                                       }}
                                       className="flex-1 py-3 items-center justify-center rounded-lg bg-pink-600 text-white font-bold hover:bg-pink-500 shadow-lg shadow-pink-900/20 transition-all"
                                     >

@@ -45,30 +45,9 @@ export default function PatientDashboard() {
   const [error, setError] = useState("");
   const reduceMotion = useReducedMotion();
   const { actions: patientActions } = usePatientActions(currentPatient?.id || "");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [emailInput, setEmailInput] = useState("");
-  const [isUpdatingContact, setIsUpdatingContact] = useState(false);
 
-  useEffect(() => {
-    if (currentPatient?.phoneNumber) setPhoneInput(currentPatient.phoneNumber);
-    if (currentPatient?.email) setEmailInput(currentPatient.email);
-  }, [currentPatient?.phoneNumber, currentPatient?.email]);
+  // Clear contact inputs as they are now handled by Doctor Intake
 
-  const updateContactInfo = async () => {
-    if (!currentPatient?.id) return;
-    setIsUpdatingContact(true);
-    try {
-      await updateDoc(doc(db, "patients", currentPatient.id), {
-        phoneNumber: phoneInput,
-        email: emailInput,
-        updatedAt: new global.Date()
-      });
-    } catch (err) {
-      console.error("Error updating contact info:", err);
-    } finally {
-      setIsUpdatingContact(false);
-    }
-  };
 
   // Real-time Subscription for Logged-in Patient
   useEffect(() => {
@@ -332,56 +311,32 @@ export default function PatientDashboard() {
               )}
             </div>
 
-            {/* Contact Details Registration Section */}
+            {/* Read-only Contact Details Section */}
             <div className="mt-8 pt-8 border-t border-white/10 relative z-20">
-              <div className="flex flex-col gap-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-teal-100 uppercase tracking-[0.2em] mb-2">SMS Notification Number</label>
-                    <div className="relative">
-                      <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-200" />
-                      <input 
-                        type="tel" 
-                        placeholder="+1 (555) 000-0000"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-teal-200/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 transition-all font-mono"
-                        value={phoneInput}
-                        onChange={(e) => setPhoneInput(e.target.value)}
-                      />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {currentPatient.phoneNumber && (
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20">
+                    <Phone size={18} className="text-teal-200" />
+                    <div>
+                      <p className="text-[10px] font-black text-teal-100 uppercase tracking-wider">SMS Alert Number</p>
+                      <p className="font-bold text-sm text-white font-mono">{currentPatient.phoneNumber}</p>
                     </div>
                   </div>
-
-                  <div className="flex-1">
-                    <label className="block text-[10px] font-black text-teal-100 uppercase tracking-[0.2em] mb-2">Email Address</label>
-                    <div className="relative">
-                      <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-teal-200" />
-                      <input 
-                        type="email" 
-                        placeholder="patient@example.com"
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/10 border border-white/20 text-white placeholder:text-teal-200/50 text-sm focus:outline-none focus:ring-2 focus:ring-white/30 transition-all"
-                        value={emailInput}
-                        onChange={(e) => setEmailInput(e.target.value)}
-                      />
+                )}
+                {currentPatient.email && (
+                  <div className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-xl p-3 border border-white/20">
+                    <Mail size={18} className="text-teal-200" />
+                    <div>
+                      <p className="text-[10px] font-black text-teal-100 uppercase tracking-wider">Registration Email</p>
+                      <p className="font-bold text-sm text-white">{currentPatient.email}</p>
                     </div>
                   </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <p className="text-[10px] text-teal-100/70 font-medium max-w-sm">Receive real-time SMS alerts and a digital discharge report via email when your treatment is finalized.</p>
-                  
-                  <button 
-                    onClick={updateContactInfo}
-                    disabled={isUpdatingContact || (phoneInput === (currentPatient?.phoneNumber || "") && emailInput === (currentPatient?.email || ""))}
-                    className="px-6 py-2.5 rounded-xl bg-white text-teal-600 font-bold text-sm shadow-lg shadow-teal-900/20 hover:bg-teal-50 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-95"
-                  >
-                    {isUpdatingContact ? "Saving..." : (
-                      <>
-                        <Save size={16} />
-                        {(currentPatient?.phoneNumber || currentPatient?.email) ? "Update Info" : "Enable Care Alerts"}
-                      </>
-                    )}
-                  </button>
-                </div>
+                )}
               </div>
+              <p className="text-[10px] text-teal-100/70 font-medium mt-4">
+                Care alerts and digital reports are sent to the contact information provided during intake. 
+                Contact medical staff to update these details.
+              </p>
             </div>
           </div>
           <User className="absolute -bottom-8 -right-8 text-white/10" size={200} />

@@ -10,6 +10,7 @@ import {
   onSnapshot 
 } from "firebase/firestore";
 import { db } from "./firebase";
+export { db };
 import { Patient, Action, ActionStatus, Department, ActionPriority } from "@/types";
 
 // --- Patients ---
