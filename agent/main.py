@@ -14,7 +14,7 @@ from .agent import CareFlowAgent
 from .scheduler import start_scheduler
 from .whatsapp import send_whatsapp_message, send_doctor_alert_whatsapp
 from .alerts import send_doctor_alert
-from .firebase_client import db, save_checkin_response, flag_alert
+from .firebase_client import db, save_checkin_response, flag_alert, firestore
 from .response_analyzer import run_full_analysis_pipeline
 
 class WebhookEvent(BaseModel):

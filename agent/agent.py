@@ -5,9 +5,11 @@ from typing import Any, Dict
 from . import firebase_client
 from . import whatsapp
 from . import alerts
+from firebase_admin import firestore
 
 import json
 import google.generativeai as genai
+import asyncio
 
 
 class CareFlowAgent:
@@ -58,10 +60,6 @@ class CareFlowAgent:
         """
         Background sequence: Enroll -> 5s Sleep -> Send Q1 -> 15s Sleep -> Emergency Check.
         """
-        import asyncio
-        from .firebase_client import db as firestore_db
-        from .whatsapp import send_whatsapp_message
-        
         patient_name = payload.get("patient_name") or "Patient"
         phone = payload.get("phone")
         emergency_phone = payload.get("emergency_phone") or "9100514240"
@@ -84,10 +82,11 @@ class CareFlowAgent:
             "C) I have Severe pain / Emergency\n\n"
             "_Please reply with A, B, or C to begin your daily check-in._"
         )
-        send_whatsapp_message(phone, first_q)
+        whatsapp.send_whatsapp_message(phone, first_q)
         
         # Update state to awaiting_q1
-        firestore_db.collection("followup_patients").document(patient_id).update({
+        db = firebase_client.get_firestore()
+        db.collection("followup_patients").document(patient_id).update({
             "conversationState": "awaiting_q1",
             "currentDay": 1,
             "emergencyPhone": emergency_phone,
@@ -98,7 +97,8 @@ class CareFlowAgent:
         await asyncio.sleep(15)
 
         # 5. Check if patient replied (if state is still awaiting_q1 and no answer)
-        p_doc = firestore_db.collection("followup_patients").document(patient_id).get()
+        db = firebase_client.get_firestore()
+        p_doc = db.collection("followup_patients").document(patient_id).get()
         if p_doc.exists:
             p_data = p_doc.to_dict()
             if p_data.get("conversationState") == "awaiting_q1" and not p_data.get("lastQ1Answer"):
@@ -108,11 +108,10 @@ class CareFlowAgent:
                     f"If you are in distress, please contact your emergency contact immediately: {emergency_phone}\n\n"
                     f"Our medical team has been notified."
                 )
-                send_whatsapp_message(phone, emergency_msg)
+                whatsapp.send_whatsapp_message(phone, emergency_msg)
                 
                 # Notify Doctor
-                from .alerts import send_doctor_alert
-                send_doctor_alert(
+                alerts.send_doctor_alert(
                     patient_name=patient_name,
                     reason=f"Patient unresponsive to follow-up Q1 after 15s. Emergency contact: {emergency_phone}",
                     severity="CRITICAL"
