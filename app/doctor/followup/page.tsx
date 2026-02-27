@@ -363,10 +363,11 @@ function PatientFollowupView({
   );
 }
 
+import CriticalAlertBanner from "@/components/followup/CriticalAlertBanner";
+
 // ─── Main Page ──────────────────────────────────────────────────
 export default function FollowupDashboard() {
   const [patients, setPatients] = useState<FollowupPatient[]>([]);
-  const [selected, setSelected] = useState<FollowupPatient | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "completed">("active");
 
   useEffect(() => {
@@ -378,60 +379,64 @@ export default function FollowupDashboard() {
         );
 
     const unsub = onSnapshot(q, snap => {
-      setPatients(snap.docs.map(d => ({
+      const docs = snap.docs.map(d => ({
         id: d.id,
         ...d.data()
-      } as FollowupPatient)));
+      } as FollowupPatient));
+
+      // ─── PRIORITY SORTING ───────────────────────────────────
+      // 1. Critical
+      // 2. Note
+      // 3. Normal
+      docs.sort((a, b) => {
+        const priorityScore: any = { critical: 3, note: 2, normal: 1 };
+        const scoreA = priorityScore[a.lastStatus] || 0;
+        const scoreB = priorityScore[b.lastStatus] || 0;
+        return scoreB - scoreA;
+      });
+
+      setPatients(docs);
     });
 
     return () => unsub();
   }, [filter]);
 
-  if (selected) {
-    return (
-      <div className="p-8 max-w-4xl mx-auto min-h-screen bg-gray-50">
-        <PatientFollowupView
-          patient={selected}
-          onBack={() => setSelected(null)}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="p-8 max-w-6xl mx-auto min-h-screen bg-gray-50">
+      <CriticalAlertBanner />
+      
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800">
+          <h1 className="text-3xl font-black text-gray-900 tracking-tight">
             Follow-up Dashboard
           </h1>
-          <p className="text-gray-500 mt-1">Monitor patient recovery metrics in real-time.</p>
+          <p className="text-gray-500 font-medium mt-1">Monitor patient recovery metrics in real-time.</p>
         </div>
 
-        <div className="flex bg-white rounded-lg border p-1 shadow-sm">
+        <div className="flex bg-white rounded-2xl border-2 border-gray-100 p-1 shadow-sm">
           {(["active","completed","all"] as const).map(f => (
             <button key={f}
               onClick={() => setFilter(f)}
-              className={`px-5 py-2 rounded-md text-sm font-semibold transition-all
+              className={`px-6 py-2 rounded-xl text-sm font-black tracking-tight transition-all
                 ${filter === f
-                  ? "bg-blue-600 text-white shadow-sm"
-                  : "text-gray-500 hover:bg-gray-100"}`}>
+                  ? "bg-blue-600 text-white shadow-md shadow-blue-100"
+                  : "text-gray-500 hover:bg-gray-50"}`}>
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </button>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
+      <div className="grid grid-cols-1 gap-6">
         {patients.map(patient => (
-          <PatientRow
-            key={patient.id}
-            patient={patient}
-            onClick={() => setSelected(patient)}
-          />
+          <Link key={patient.id} href={`/doctor/followup/${patient.id}`}>
+            <PatientRow
+              patient={patient}
+            />
+          </Link>
         ))}
         {patients.length === 0 && (
-          <div className="text-center py-24 bg-white rounded-xl border border-dashed border-gray-300 text-gray-400">
+          <div className="text-center py-24 bg-white rounded-3xl border-4 border-dashed border-gray-100 text-gray-300 font-black text-xl italic uppercase">
             No {filter} patients recorded.
           </div>
         )}
@@ -442,11 +447,9 @@ export default function FollowupDashboard() {
 
 // ─── Patient Row in List ────────────────────────────────────────
 function PatientRow({
-  patient,
-  onClick
+  patient
 }: {
-  patient: FollowupPatient,
-  onClick: () => void
+  patient: FollowupPatient
 }) {
   const [latestCheckin, setLatestCheckin] =
     useState<CheckinResponse | null>(null);

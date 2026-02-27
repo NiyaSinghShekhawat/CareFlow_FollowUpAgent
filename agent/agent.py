@@ -18,7 +18,7 @@ class CareFlowAgent:
     include real LLM calls (LangChain, OpenAI, etc.) as you iterate.
     """
 
-    async def handle_event(self, event: Dict[str, Any]) -> Dict[str, Any]:
+    async def handle_event(self, event: Dict[str, Any], background_tasks: Any = None) -> Dict[str, Any]:
         event_type = event.get("event_type")
         patient_id = event.get("patient_id")
         payload = event.get("payload") or {}
@@ -36,6 +36,9 @@ class CareFlowAgent:
             return await self._handle_lab_result_updated(patient_id, payload)
 
         if event_type == "patient_followup":
+            if background_tasks:
+                background_tasks.add_task(self._process_followup_sequence, patient_id, payload)
+                return {"status": "enrolling", "background": True}
             return await self._handle_patient_followup(patient_id, payload)
 
         if event_type == "patient_intake":
@@ -50,6 +53,70 @@ class CareFlowAgent:
             "message": "Unknown event_type; no action taken.",
             "event_type": event_type,
         }
+
+    async def _process_followup_sequence(self, patient_id: str, payload: Dict[str, Any]):
+        """
+        Background sequence: Enroll -> 5s Sleep -> Send Q1 -> 15s Sleep -> Emergency Check.
+        """
+        import asyncio
+        from .firebase_client import db as firestore_db
+        from .whatsapp import send_whatsapp_message
+        
+        patient_name = payload.get("patient_name") or "Patient"
+        phone = payload.get("phone")
+        emergency_phone = payload.get("emergency_phone") or "9100514240"
+
+        # 1. Enroll Patient in Follow-Up
+        await self._handle_patient_followup(patient_id, payload)
+        
+        if not phone:
+            return
+
+        # 2. Wait 5 seconds
+        await asyncio.sleep(5)
+
+        # 3. Send Q1
+        first_q = (
+            f"Hello {patient_name}! I'm your CareFlow assistant. 🌈\n\n"
+            "*Q1: How are you feeling overall right now?*\n"
+            "A) I feel Good / Stable\n"
+            "B) I feel Uncomfortable / Mild pain\n"
+            "C) I have Severe pain / Emergency\n\n"
+            "_Please reply with A, B, or C to begin your daily check-in._"
+        )
+        send_whatsapp_message(phone, first_q)
+        
+        # Update state to awaiting_q1
+        firestore_db.collection("followup_patients").document(patient_id).update({
+            "conversationState": "awaiting_q1",
+            "currentDay": 1,
+            "emergencyPhone": emergency_phone,
+            "q1SentAt": firestore.SERVER_TIMESTAMP
+        })
+
+        # 4. Wait 15 seconds for reply
+        await asyncio.sleep(15)
+
+        # 5. Check if patient replied (if state is still awaiting_q1 and no answer)
+        p_doc = firestore_db.collection("followup_patients").document(patient_id).get()
+        if p_doc.exists:
+            p_data = p_doc.to_dict()
+            if p_data.get("conversationState") == "awaiting_q1" and not p_data.get("lastQ1Answer"):
+                emergency_msg = (
+                    f"⚠️ *EMERGENCY ALERT*\n\n"
+                    f"We haven't received a response to your check-in. "
+                    f"If you are in distress, please contact your emergency contact immediately: {emergency_phone}\n\n"
+                    f"Our medical team has been notified."
+                )
+                send_whatsapp_message(phone, emergency_msg)
+                
+                # Notify Doctor
+                from .alerts import send_doctor_alert
+                send_doctor_alert(
+                    patient_name=patient_name,
+                    reason=f"Patient unresponsive to follow-up Q1 after 15s. Emergency contact: {emergency_phone}",
+                    severity="CRITICAL"
+                )
 
     async def _handle_patient_checkin(
         self,
@@ -127,26 +194,61 @@ class CareFlowAgent:
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Handles sending notifications when a patient is placed under follow-up.
+        Handles enrolling a patient in the follow-up program with custom parameters.
         """
         patient_name = payload.get("patient_name") or "Patient"
         patient_email = payload.get("patient_email")
         phone = payload.get("phone")
-        duration = payload.get("duration") or "the specified period"
+        duration_str = payload.get("duration") or "7"
+        custom_parameters = payload.get("parameters") # Expects List of parameters from UI
+        
+        # Extract numeric days from duration
+        try:
+            followup_days = int(''.join(filter(str.isdigit, duration_str)))
+        except:
+            followup_days = 7
+
+        db = firebase_client.get_firestore()
+        
+        # --- ENROLLMENT LOGIC ---
+        # If no custom parameters provided, use sensible defaults
+        parameters = custom_parameters if custom_parameters else [
+            {"name": "Pain Level", "questionType": "rate", "alarmingRate": 4, "scaleZero": "None", "scaleFive": "Severe"},
+            {"name": "Any Fever?", "questionType": "yesno", "alarmingAnswer": "yes"}
+        ]
+
+        enrollment_data = {
+            "patientName": patient_name,
+            "patientPhone": phone,
+            "patientEmail": patient_email,
+            "emergencyPhone": payload.get("emergency_phone") or "9100514240",
+            "surgeryType": "Recovery",
+            "followupDays": followup_days,
+            "currentDay": 0,
+            "status": "active",
+            "doctorName": "Mehta",
+            "conversationState": "idle",
+            "lastStatus": "normal",
+            "lastRatings": {},
+            "lastSubjective": "",
+            "parameters": parameters,
+            "enrolledAt": firestore.SERVER_TIMESTAMP
+        }
+        
+        db.collection("followup_patients").document(patient_id).set(enrollment_data)
 
         success_notifs = []
-
         if phone:
-            whatsapp.send_followup_whatsapp(phone, patient_name, duration)
+            whatsapp.send_followup_whatsapp(phone, patient_name, duration_str)
             success_notifs.append("whatsapp")
 
         if patient_email:
-            alerts.send_followup_email(patient_email, patient_name, duration)
+            alerts.send_followup_email(patient_email, patient_name, duration_str)
             success_notifs.append("email")
 
         return {
             "handled": True,
-            "action": "patient_followup_notified",
+            "action": "patient_enrolled_in_followup",
             "patient_id": patient_id,
             "notifications_sent": success_notifs
         }

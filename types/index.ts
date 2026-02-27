@@ -40,6 +40,7 @@ export interface Patient {
   assignedDoctorId?: string; // ID of the doctor managing this patient
   phoneNumber?: string;      // Patient's contact number for SMS alerts
   email?: string;            // Patient's email address for discharge reports
+  emergencyContact?: string; // Emergency contact number for escalations
   
   // Status tracking for specific stages
   consultancyStatus?: "pending" | "processing" | "completed";

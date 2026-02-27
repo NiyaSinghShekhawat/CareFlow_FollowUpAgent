@@ -36,7 +36,9 @@ import {
   Calendar,
   Scan,
   MessageSquare,
-  Send
+  Send,
+  Plus,
+  Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -72,6 +74,13 @@ export default function DoctorDashboard() {
   const [isRegisteringDoc, setIsRegisteringDoc] = useState(false);
   const [docRegistered, setDocRegistered] = useState(false);
 
+  // Follow-up Parameter State
+  const [followUpParams, setFollowUpParams] = useState<any[]>([
+    { name: "Pain Level", questionType: "rate", alarmingRate: 4, scaleZero: "Low", scaleFive: "Severe" },
+    { name: "Recovery Speed", questionType: "rate", alarmingRate: 2, scaleZero: "Expected", scaleFive: "Slow" }
+  ]);
+  const [newParam, setNewParam] = useState({ name: "", questionType: "rate" as const });
+
   // Tab State
   const [activeTab, setActiveTab] = useState<'ongoing' | 'followup' | 'completed'>('ongoing');
 
@@ -86,7 +95,8 @@ export default function DoctorDashboard() {
     pastMedications: "",
     pastAllergies: "",
     phoneNumber: "",
-    email: ""
+    email: "",
+    emergencyContact: ""
   });
 
   // Sound Alert Logic
@@ -208,6 +218,7 @@ export default function DoctorDashboard() {
         consultancyStatus: "pending",
         phoneNumber: formData.phoneNumber,
         email: formData.email,
+        emergencyContact: formData.emergencyContact,
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now()
       });
@@ -258,7 +269,8 @@ export default function DoctorDashboard() {
         pastMedications: "",
         pastAllergies: "",
         phoneNumber: "",
-        email: ""
+        email: "",
+        emergencyContact: ""
       });
       playSound('click');
     } catch (error) {
@@ -854,7 +866,7 @@ export default function DoctorDashboard() {
                                       onChange={(e) => setFollowUpDate(e.target.value)}
                                     />
                                   </div>
-                                  <div>
+                                   <div>
                                     <label className="block text-xs font-bold text-pink-400 uppercase tracking-wider mb-2">Follow-Up Duration</label>
                                     <input 
                                       type="text" 
@@ -863,6 +875,70 @@ export default function DoctorDashboard() {
                                       value={followUpDuration}
                                       onChange={(e) => setFollowUpDuration(e.target.value)}
                                     />
+                                  </div>
+
+                                  {/* Monitoring Parameters Section */}
+                                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 space-y-3">
+                                     <h4 className="text-xs font-bold text-pink-400 uppercase tracking-widest flex items-center gap-2">
+                                       <Activity size={14} />
+                                       Monitoring Parameters
+                                     </h4>
+                                     
+                                     <div className="space-y-2">
+                                       {followUpParams.map((param, index) => (
+                                         <div key={index} className="flex items-center justify-between bg-slate-900 p-2 rounded-lg border border-slate-800">
+                                           <div>
+                                             <p className="text-white text-sm font-bold">{param.name}</p>
+                                             <p className="text-[10px] text-slate-500 uppercase">{param.questionType} | Alarm: {
+                                               param.questionType === 'rate' ? `≥ ${param.alarmingRate}` :
+                                               param.questionType === 'yesno' ? `if "${param.alarmingAnswer}"` :
+                                               `${param.alarmingValueMin}-${param.alarmingValueMax} ${param.unit}`
+                                             }</p>
+                                           </div>
+                                           <button 
+                                             onClick={() => setFollowUpParams(prev => prev.filter((_, i) => i !== index))}
+                                             className="text-slate-600 hover:text-red-400 p-1"
+                                           >
+                                             <Trash2 size={14} />
+                                           </button>
+                                         </div>
+                                       ))}
+                                     </div>
+
+                                     <div className="pt-2 border-t border-slate-800">
+                                       <div className="grid grid-cols-2 gap-2 mb-2">
+                                         <input 
+                                           type="text" 
+                                           placeholder="Param Name (e.g. BP)"
+                                           className="bg-slate-900 border-slate-700 rounded-lg p-2 text-xs text-white"
+                                           value={newParam.name}
+                                           onChange={(e) => setNewParam({...newParam, name: e.target.value})}
+                                         />
+                                         <select 
+                                           className="bg-slate-900 border-slate-700 rounded-lg p-2 text-xs text-white"
+                                           value={newParam.questionType}
+                                           onChange={(e) => setNewParam({...newParam, questionType: e.target.value as any})}
+                                         >
+                                           <option value="rate">Mild/Medium/Severe</option>
+                                           <option value="yesno">Yes/No</option>
+                                           <option value="value">Numeric Value</option>
+                                         </select>
+                                       </div>
+                                       <button 
+                                         onClick={() => {
+                                           if (!newParam.name) return;
+                                           let p: any = { ...newParam };
+                                           if (p.questionType === 'rate') { p.alarmingRate = 3; p.scaleZero = "Mild"; p.scaleFive = "Severe"; }
+                                           if (p.questionType === 'yesno') { p.alarmingAnswer = "yes"; }
+                                           if (p.questionType === 'value') { p.alarmingValueMin = 90; p.alarmingValueMax = 140; p.unit = ""; }
+                                           setFollowUpParams([...followUpParams, p]);
+                                           setNewParam({ name: "", questionType: "rate" });
+                                         }}
+                                         className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold uppercase rounded-lg border border-slate-700 flex items-center justify-center gap-2"
+                                       >
+                                         <Plus size={12} /> Add Parameter
+                                       </button>
+                                     </div>
                                   </div>
                                   <div className="flex gap-3">
                                     <button 
@@ -892,7 +968,9 @@ export default function DoctorDashboard() {
                                                 patient_name: `${p.firstName} ${p.lastName}`,
                                                 patient_email: p.email,
                                                 phone: p.phoneNumber,
-                                                duration: followUpDuration
+                                                emergency_phone: p.emergencyContact || "9100514240",
+                                                duration: followUpDuration,
+                                                parameters: followUpParams
                                               }
                                             })
                                           });

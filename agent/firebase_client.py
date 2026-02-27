@@ -59,18 +59,41 @@ def get_patient_by_id(db: firestore.Client, patient_id: str) -> Optional[Dict[st
 def update_patient(db: firestore.Client, patient_id: str, update: Dict[str, Any]) -> None:
     db.collection("patients").document(patient_id).set(update, merge=True)
 
+def get_patient_actions(db: firestore.Client, patient_id: str) -> List[Dict[str, Any]]:
+    """
+    Fetches all treatment actions for a specific patient, sorted by time.
+    """
+    query = db.collection("actions")\
+              .where("patientId", "==", patient_id)\
+              .order_by("createdAt", direction=firestore.Query.ASCENDING)\
+              .stream()
+    return [doc.to_dict() for doc in query]
+
 
 def get_patients_needing_checkin(db: firestore.Client) -> List[Dict[str, Any]]:
     """
-    Simple example: return all active inpatients.
-
-    You can refine this with timestamps, triage priority, etc.
+    Returns all active inpatients.
     """
     query = db.collection("patients").where("status", "==", "admitted")
     return [
         {**(doc.to_dict() or {}), "id": doc.id}
         for doc in query.stream()
     ]
+
+def get_active_followup_patients(db: firestore.Client) -> List[Dict[str, Any]]:
+    """
+    Returns all patients currently in the follow-up program.
+    """
+    query = db.collection("followup_patients")\
+              .where("status", "==", "active")\
+              .stream()
+    return [{**doc.to_dict(), "id": doc.id} for doc in query]
+
+def update_followup_patient(p_doc_id: str, data: Dict[str, Any]) -> None:
+    """
+    Updates a document in the followup_patients collection.
+    """
+    db.collection("followup_patients").document(p_doc_id).update(data)
 
 
 # V2: WhatsApp Interactivity Helpers
