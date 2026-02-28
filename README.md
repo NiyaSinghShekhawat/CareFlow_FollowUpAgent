@@ -234,4 +234,4 @@ Distributed under the **MIT License**.
 
 ---
 
-*Built with ❤️ for the VNR Hackathon 2026.*
+*Built with ❤️ for the KLH Hackathon 2026.*
