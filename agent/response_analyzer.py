@@ -1,6 +1,6 @@
 import os
 import json
-import google.generativeai as genai
+from .ai_client import ask_ai
 from typing import Any, Dict, List
 from . import alerts
 from . import whatsapp
@@ -29,14 +29,8 @@ def parse_q1_answer(raw_reply: str) -> str:
 
 def parse_parameter_replies(raw_reply: str, parameters: List[Dict[str, Any]]) -> Dict[str, Any]:
     """
-    Uses Gemini to extract numerical ratings and subjective comments from mixed WhatsApp text.
+    Uses the AI Client to extract numerical ratings and subjective comments from mixed WhatsApp text.
     """
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    if not GEMINI_API_KEY:
-        return {"ratings": {}, "subjective": "Analysis failed: API Key missing"}
-
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
 
     param_desc = []
     for p in parameters:
@@ -70,8 +64,8 @@ def parse_parameter_replies(raw_reply: str, parameters: List[Dict[str, Any]]) ->
     """
 
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip().replace("```json", "").replace("```", "")
+        raw = ask_ai(prompt)
+        text = raw.strip().replace("```json", "").replace("```", "")
         return json.loads(text)
     except Exception as e:
         print(f"❌ Parsing Error: {e}")
@@ -214,11 +208,8 @@ def analyze_patient_response(
     crossed_params: List[Dict[str, Any]]
 ) -> Dict[str, Any]:
     """
-    Uses Gemini to generate clinical summary and patient reply.
+    Uses the AI Client to generate clinical summary and patient reply.
     """
-    GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash')
 
     prompt = f"""
     Internal Clinical Analysis:
@@ -240,8 +231,8 @@ def analyze_patient_response(
     }}
     """
     try:
-        response = model.generate_content(prompt)
-        text = response.text.strip().replace("```json", "").replace("```", "")
+        raw = ask_ai(prompt)
+        text = raw.strip().replace("```json", "").replace("```", "")
         return json.loads(text)
     except:
         return {{}}

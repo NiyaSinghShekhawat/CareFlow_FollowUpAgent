@@ -31,13 +31,13 @@ def run_daily_checkins() -> None:
         phone = patient.get("patientPhone") # Use patientPhone as per spec
 
         if not phone:
-            print(f"⚠️ No phone for patient {patient.get('patientName', p_doc_id)}")
+            print("[WARN] No phone for patient " + patient.get('patientName', p_doc_id))
             continue
 
         # 1. Check if program is over
         if current_day > total_days:
             firebase_client.update_followup_patient(p_doc_id, {"status": "completed"})
-            print(f"✅ Follow-up completed for {patient.get('patientName')}")
+            print(f"[OK] Follow-up completed for {patient.get('patientName')}")
             continue
 
         # 2. Reset state and send Q1
@@ -57,7 +57,7 @@ def run_daily_checkins() -> None:
                 "conversationState": "awaiting_q1",
                 "notificationSent": True
             })
-            print(f"📲 Sent Day {current_day} Q1 to {patient.get('patientName')}")
+            print(f"[OK] Sent Day {current_day} Q1 to {patient.get('patientName')}")
 
 def start_scheduler(app: FastAPI) -> None:
     global _scheduler
@@ -71,12 +71,12 @@ def start_scheduler(app: FastAPI) -> None:
     
     # 1. Proactive Nudge (Existing, kept for compatibility)
     interval_min = int(os.getenv("CHECKIN_INTERVAL_MINUTES", "30"))
-    scheduler.add_job(
-        _proactive_patient_checkins,
-        "interval",
-        minutes=interval_min,
-        id="proactive_nudges"
-    )
+    # scheduler.add_job(
+    #     _proactive_patient_checkins,
+    #     "interval",
+    #     minutes=interval_min,
+    #     id="proactive_nudges"
+    # )
 
     # 2. Daily Check-in Trigger at 09:00 IST
     scheduler.add_job(
@@ -89,10 +89,18 @@ def start_scheduler(app: FastAPI) -> None:
 
     scheduler.start()
     _scheduler = scheduler
-    print("⏰ Scheduler started: 9 AM IST Daily Check-ins enabled.")
+    print("[OK] Scheduler started: 9 AM IST Daily Check-ins enabled.")
 
     @app.on_event("shutdown")
     async def _shutdown_scheduler() -> None:
         if scheduler.running:
             scheduler.shutdown(wait=False)
+
+def get_scheduler() -> BackgroundScheduler:
+    global _scheduler
+    if _scheduler is None:
+        # Fallback if start_scheduler wasn't called (e.g. testing)
+        _scheduler = BackgroundScheduler()
+        _scheduler.start()
+    return _scheduler
 

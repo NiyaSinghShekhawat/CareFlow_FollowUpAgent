@@ -96,8 +96,62 @@ def update_followup_patient(p_doc_id: str, data: Dict[str, Any]) -> None:
     db.collection("followup_patients").document(p_doc_id).update(data)
 
 
-# V2: WhatsApp Interactivity Helpers
+# Module-level db client (must be before helper functions that reference db)
 db = get_firestore()
+
+
+def get_patient_by_phone(phone: str):
+    """
+    Finds an active followup_patient by phone number.
+    Tries 4 phone formats to handle format mismatches between UltraMsg and Firestore.
+    """
+    raw = str(phone).strip()
+    normalized = raw.replace("+", "").replace(" ", "").replace("-", "")
+    
+    formats = set([
+        raw,
+        normalized,
+        "+" + normalized,
+        normalized[2:] if normalized.startswith("91") and len(normalized) == 12 else "91" + normalized
+    ])
+
+    for fmt in formats:
+        docs = list(
+            db.collection("followup_patients")
+            .where("patientPhone", "==", fmt)
+            .where("status", "==", "active")
+            .limit(1)
+            .stream()
+        )
+        if docs:
+            d = docs[0].to_dict()
+            d["doc_id"] = docs[0].id
+            print(f"[FOUND] Patient with phone format '{fmt}'")
+            return d
+
+    # Debug: show all active patients' phone numbers for diagnosis
+    all_active = list(
+        db.collection("followup_patients").where("status", "==", "active").stream()
+    )
+    print(f"[NOT FOUND] No patient for phone: '{raw}'")
+    print(f"   DB has: {[d.to_dict().get('patientPhone') for d in all_active]}")
+    return None
+
+
+def update_followup(doc_id: str, data: dict) -> None:
+    """Updates a document in the followup_patients collection."""
+    db.collection("followup_patients").document(doc_id).update(data)
+
+
+def save_checkin(doc_id: str, data: dict) -> None:
+    """Saves a full checkin response record."""
+    db.collection("checkin_responses").add(data)
+
+
+def save_alert(data: dict) -> None:
+    """Saves a critical/moderate/no_response alert record."""
+    db.collection("critical_alerts").add(data)
+
 
 def save_checkin_response(phone: str, data: Dict[str, Any]) -> None:
     """
