@@ -2,8 +2,6 @@
 
 > A unified command center for emergency departments and hospital settings, built with Next.js, Firebase, and an intelligent AI Follow-Up Agent.
 
-🚀 **Live Demo**: [care-flow-lilac.vercel.app](https://care-flow-lilac.vercel.app/)
-
 ---
 
 ## 📋 Table of Contents
